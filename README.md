@@ -42,7 +42,7 @@ pixi run test
 ## 実行
 
 ```bash
-# メインアプリケーション（add / multiply / subtract サブコマンドを持つ。詳細は後述）
+# メインアプリケーション（add / multiply / subtract / divide サブコマンドを持つ。詳細は後述）
 ./build/app --help
 
 # テスト個別実行
@@ -171,26 +171,49 @@ target_link_libraries(app
 `cliconf::cliconf` をリンクし、CLI11 / toml++ / nlohmann_json / fkYAML は
 config-system が内部でインクルードするため個別にリンクする必要があります。
 
-`app` は `add` / `multiply` / `subtract` の3つのサブコマンドを持ち、`--mode` / `--timeout` /
-`--config` はサブコマンド共通のオプションとして機能します。3つは設定ファイル連携の要否と
-方法がそれぞれ異なり、cliconf の config-system が提供する3通りのマッピング方式に対応します。
+`app` は `add` / `multiply` / `subtract` / `divide` の4つのサブコマンドを持ち、`--mode` /
+`--timeout` / `--config` はサブコマンド共通のオプションとして機能します。4つは設定ファイル
+連携の要否と方法がそれぞれ異なり、cliconf の config-system が提供するマッピング方式に対応します。
 
 | サブコマンド | 方式 | 設定ファイルからの読み込み | 実装 |
 | --- | --- | --- | --- |
 | `add` | CLIオンリー | 不可 | サブコマンドの位置引数のみ。`Config` には持たせない |
 | `multiply` | 自動マッピング | 可（`[multiply]` セクション） | `kConfigSchema` に `FieldDescriptor{"--multiply.a", "multiply.a", ...}` を1行登録するだけ |
 | `subtract` | 手動マッピング | 可（`[subtract]` セクション） | `Config::subtract` という入れ子構造体を `ExtraLoader`（`SubtractExtraLoader`）で手動読み込み |
+| `divide` | 自動マッピング（別 `ConfigManager`） | 可（`[divide]` セクション） | `DivideConfig` を主語にした専用の `kDivideSchema` / `ConfigManager<DivideConfig, ...>` |
 
-自動/手動を分ける基準は「設定ファイル側のネストの深さ」ではなく、**`Config` 構造体側が
-フラットかどうか**です。`FieldDescriptor` の第4引数（メンバーポインタ）は `Config` 直下の
-1フィールドしか指せません。`multiply_a` / `multiply_b` や `network_retry_count` は `Config`
-直下のフラットなメンバーなので、設定ファイル側が何階層ネストしていても
-（`[multiply]` の `a`/`b`、`[network.retry]` の `count` など）`config_key` にドット区切りの
-パスを書くだけで自動マッピングできます（`ResolveDottedKey` が段数に関わらず辿るため）。
-一方 `subtract` の `a` / `b` は `SubtractConfig` という入れ子構造体のメンバーで、
-`FieldDescriptor` は `&Config::subtract`（`SubtractConfig` 型全体）までしか指せず `a` / `b`
-を個別に指せないため、`ExtraLoader` で TOML / JSONC / YAML のパース結果から手動で
-読み出す必要があります。
+自動/手動を分ける基準は「設定ファイル側のネストの深さ」ではなく、**`FieldDescriptor` の
+`Owner`（メンバーポインタが指す構造体）が何であるかを`ConfigManager`のテンプレート引数
+`Config`と一致させられるかどうか**です。`FieldDescriptor` の第4引数（メンバーポインタ）は
+`Owner` 直下の1フィールドしか指せず、`ConfigManager<Config, Schema>` は常に
+`Config` 型インスタンスに対して `.*field.member` を呼びます。
+
+- `multiply_a` / `multiply_b` や `network_retry_count` は `Config` 直下のフラットな
+  メンバーなので、そのまま `kConfigSchema`（`Owner = Config`）に登録するだけで自動
+  マッピングできます。設定ファイル側が何階層ネストしていても
+  （`[multiply]` の `a`/`b`、`[network.retry]` の `count` など）`config_key` にドット区切り
+  のパスを書けば `ResolveDottedKey` が段数に関わらず辿ってくれます。
+- `subtract` の `a` / `b` は `SubtractConfig` という `Config` の入れ子構造体のメンバーです。
+  `&Config::subtract`（`SubtractConfig` 型全体）を `FieldDescriptor` にそのまま渡して
+  構造体ごと自動マッピングすることはできません。実際に検証したところ2つの理由で
+  コンパイルエラーになります。(1) `ConfigManager<Config, ...>` は `Config` 型インスタンス
+  に対してしか `.*field.member` できないため、`Owner` を `SubtractConfig` にしても使えない。
+  (2) 仮に (1) を回避できたとしても `ResolveDottedKey` が最終的に呼ぶ
+  `toml::table::value<T>()` は `string`/`int64_t`/`double`/`bool` 等のネイティブ型しか
+  受け付けず、`T` が集約型だと `static_assert` で失敗します。そのため `ExtraLoader`
+  （`SubtractExtraLoader`）で TOML / JSONC / YAML のパース結果から手動で読み出します
+  （`config_schema.hpp` の `SubtractExtraLoader` 直前のコメントに詳細）。
+- `divide` の `a` / `b` も `DivideConfig` という入れ子構造体のメンバーですが、`subtract`
+  とは別の方法で自動マッピングしています。`config_key` のドット区切りパス解決と
+  `FieldDescriptor` の `Owner` 型は独立しているため、**`DivideConfig` それ自体を主語に
+  した専用のスキーマ `kDivideSchema`（`FieldDescriptor{"--divide.a", "divide.a", ...,
+  &DivideConfig::a}`）と、専用の `ConfigManager<DivideConfig, decltype(kDivideSchema)>`
+  を用意すれば、`[divide]` セクションを自動マッピングできます**。`main.cpp` では
+  `Config` 用と `DivideConfig` 用の2つの `ConfigManager` をそれぞれ `Resolve()` し、
+  結果を `Config::divide` に代入しています。ただしこの方式には次のトレードオフが
+  あります。(1) 同じ設定ファイル群を `ConfigManager` の数だけ独立に再パースすることになる。
+  (2) `Config` 自体はやはりフラットなままで、`DivideConfig` を保持するための入れ子
+  フィールド（`Config::divide`）自体は依然として `kConfigSchema` の対象外。
 
 いずれも優先度は CLI引数 > 設定ファイル > デフォルト値です。
 
@@ -213,6 +236,11 @@ config-system が内部でインクルードするため個別にリンクする
 ./build/app subtract                                  # デフォルト値 (0, 0) を使用 -> 0
 ./build/app --config config/example.toml subtract     # 設定ファイルの [subtract] を使用 -> 70
 ./build/app --config config/example.toml subtract 5 2 # CLI引数が設定ファイルを上書き -> 3
+
+# divide: 自動マッピング（DivideConfig 専用の ConfigManager、グローバルオプション --divide.a / --divide.b も使える）
+./build/app divide                                    # デフォルト値 (0, 0) はゼロ除算エラー
+./build/app --config config/example.toml divide       # 設定ファイルの [divide] を使用 -> 25
+./build/app --config config/example.toml --divide.b 5 divide # CLI引数が設定ファイルを上書き -> 20
 ```
 
 ## GNU make

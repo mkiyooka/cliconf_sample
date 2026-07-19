@@ -39,6 +39,15 @@ CLI::App *SetupSubtractCommand(CLI::App &app, Config &config) {
     return subtract;
 }
 
+// divide: Config::subtract と同じ「入れ子構造体」だが、DivideConfig を主語にした
+// 専用の ConfigManager<DivideConfig, decltype(kDivideSchema)> で自動マッピングする
+// （kDivideSchema, config_schema.hpp 参照）。サブコマンド自体は演算対象の値を持たない。
+CLI::App *SetupDivideCommand(CLI::App &app) {
+    return app.add_subcommand(
+        "divide", "Divide two integers (auto-mapped via a dedicated ConfigManager<DivideConfig>)"
+    );
+}
+
 } // namespace
 
 int main(int argc, char *argv[]) {
@@ -53,12 +62,19 @@ int main(int argc, char *argv[]) {
     AppConfigManager config_manager{config::kConfigSchema, config::SubtractExtraLoader{}};
     config_manager.RegisterOptions(app);
 
+    // divide: DivideConfig を主語にした専用の ConfigManager。CLI11 への
+    // オプション登録(--divide.a/--divide.b)と Resolve() は Config 用とは独立して行う。
+    using DivideConfigManager = config::ConfigManager<DivideConfig, decltype(config::kDivideSchema)>;
+    DivideConfigManager divide_config_manager{config::kDivideSchema};
+    divide_config_manager.RegisterOptions(app);
+
     Config config;
     int add_a = 0;
     int add_b = 0;
     const CLI::App *const add_cmd = SetupAddCommand(app, add_a, add_b);
     const CLI::App *const multiply_cmd = SetupMultiplyCommand(app);
     const CLI::App *const subtract_cmd = SetupSubtractCommand(app, config);
+    const CLI::App *const divide_cmd = SetupDivideCommand(app);
 
     try {
         app.parse(argc, argv);
@@ -72,8 +88,12 @@ int main(int argc, char *argv[]) {
     // CLI > ファイル > デフォルトで解決済み。設定ファイルが存在しない・パースに
     // 失敗した場合は Resolve() が std::runtime_error を送出する。
     Config resolved;
+    DivideConfig divide_resolved;
     try {
         resolved = config_manager.Resolve(config_files);
+        // divide: DivideConfig 用の ConfigManager が同じ設定ファイル群を独立に
+        // 再パースし、[divide] セクションを自動マッピングする(ExtraLoader不要)。
+        divide_resolved = divide_config_manager.Resolve(config_files);
     } catch (const std::exception &e) {
         fmt::print(stderr, "Error: {}\n", e.what());
         return 1;
@@ -83,6 +103,7 @@ int main(int argc, char *argv[]) {
     config.multiply_a = resolved.multiply_a;
     config.multiply_b = resolved.multiply_b;
     config.network_retry_count = resolved.network_retry_count;
+    config.divide = divide_resolved;
 
     // subtract: CLI引数が明示指定されていなければ、ExtraLoader が読み込んだファイル値を使う。
     if (subtract_cmd->count("a") == 0) {
@@ -98,6 +119,12 @@ int main(int argc, char *argv[]) {
         fmt::print("{}\n", config.multiply_a * config.multiply_b);
     } else if (*subtract_cmd) {
         fmt::print("{}\n", config.subtract.a - config.subtract.b);
+    } else if (*divide_cmd) {
+        if (config.divide.b == 0) {
+            fmt::print(stderr, "Error: divide by zero (a={})\n", config.divide.a);
+            return 1;
+        }
+        fmt::print("{}\n", config.divide.a / config.divide.b);
     }
 
     fmt::print("mode: {}\n", config.mode);

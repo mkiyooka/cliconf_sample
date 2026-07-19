@@ -11,3 +11,7 @@ count = 5
 [subtract]
 a = 100
 b = 30
+
+[divide]
+a = 100
+b = 4

@@ -27,6 +27,18 @@ inline constexpr auto kConfigSchema = std::make_tuple(
 
 // subtract サブコマンドの a/b はスキーマで自動マッピングできない入れ子構造体のため、
 // ExtraLoader で設定ファイルの [subtract] セクションから読み込む。
+//
+// なぜ FieldDescriptor で SubtractConfig 全体（&Config::subtract）を指定できないか:
+// 1) ConfigManager::RegisterOptions / Resolve は常に "Config型インスタンス.*field.member"
+//    という形で参照するため、field.member は T Config::* でなければコンパイルできない
+//    （FieldDescriptor<Owner, T> の Owner を SubtractConfig にしても Config に対して
+//    使えない）。
+// 2) 仮に(1)を回避できても、ResolveDottedKey は最終的に toml::table::value<T>() 等を
+//    呼ぶが、toml++ の value<T>() は string/int64_t/double/bool 等のネイティブ型しか
+//    受け付けず、T が SubtractConfig のような集約型だと static_assert でコンパイル
+//    エラーになる。
+// つまり自動マッピングの単位は常にスカラー値1個であり、構造体をまるごとマッピングする
+// ことはできない。
 struct SubtractExtraLoader {
     void LoadToml(const toml::table &tbl, Config &conf) const {
         if (const auto *sub = tbl["subtract"].as_table()) {
@@ -57,5 +69,18 @@ struct SubtractExtraLoader {
         }
     }
 };
+
+// divide サブコマンドの被演算子(DivideConfig)を自動マッピングするための専用スキーマ。
+// FieldDescriptor<Owner, T> の Owner を Config ではなく DivideConfig にできるため、
+// DivideConfig を主語にした ConfigManager<DivideConfig, decltype(kDivideSchema)> を
+// main.cpp で別途 Resolve() すれば、config_key のドット区切りパス("divide.a")経由で
+// [divide] セクションを ExtraLoader なしで自動マッピングできる。
+// (subtract との違い: subtract は Config::subtract という「Config のメンバー」を
+//  スキーマ化しようとして失敗する一方、divide は DivideConfig それ自体を主語にした
+//  別のスキーマ・ConfigManager を用意することで自動マッピングを実現している。)
+inline constexpr auto kDivideSchema = std::make_tuple(
+    FieldDescriptor{"--divide.a", "divide.a", "Dividend (overrides config file)", &DivideConfig::a},
+    FieldDescriptor{"--divide.b", "divide.b", "Divisor (overrides config file)", &DivideConfig::b}
+);
 
 } // namespace config

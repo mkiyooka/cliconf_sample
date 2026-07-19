@@ -11,6 +11,17 @@ struct SubtractConfig {
     int b = 0;
 };
 
+// divide サブコマンドの被演算子。SubtractConfig と同型だが読み込み方が異なる。
+// DivideConfig 自体を「Owner」とする専用の kDivideSchema / ConfigManager<DivideConfig, ...>
+// を用意し、config_key に "divide.a" のようにドット区切りで書けば [divide] セクションを
+// 自動マッピングできる(config_key のパス解決とメンバーポインタの Owner 型は独立して
+// いるため)。Config::divide にはその結果を代入するだけで、ExtraLoader は不要になる
+// (config_schema.hpp の kDivideSchema、main.cpp の divide 関連コードを参照)。
+struct DivideConfig {
+    int a = 0;
+    int b = 0;
+};
+
 struct Config {
     std::string mode = "default";
     int timeout = 30;
@@ -29,4 +40,8 @@ struct Config {
     int network_retry_count = 3;
 
     SubtractConfig subtract;
+
+    // divide サブコマンドの被演算子。ConfigManager<DivideConfig, ...> によって
+    // [divide] セクションから自動マッピングされた結果を代入するだけの器（詳細は上記）。
+    DivideConfig divide;
 };

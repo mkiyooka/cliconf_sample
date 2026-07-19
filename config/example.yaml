@@ -12,3 +12,7 @@ network:
 subtract:
   a: 50
   b: 8
+
+divide:
+  a: 40
+  b: 5

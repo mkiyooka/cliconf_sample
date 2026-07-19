@@ -134,6 +134,30 @@ pixi run valgrind
     - `quality-setup.cmake`: コード品質設定
     - `quality-tools.cmake`: コード品質ツール
 
+## cliconf（config-system）の導入
+
+[cliconf](https://github.com/mkiyooka/cliconf) を FetchContent で取り込み、TOML / JSONC / YAML 設定ファイルと
+CLI11 を統合する config-system を利用しています。設定は `cmake/dependencies-app.cmake` に記述しています。
+
+```cmake
+add_external_package(cliconf ext/cliconf
+    GIT_REPOSITORY https://github.com/mkiyooka/cliconf.git
+    GIT_TAG main
+)
+FetchContent_MakeAvailable(cliconf)
+```
+
+`src/app` では `cliconf::config`（config-system）と `command_lib`（cliconf本体の
+`RunCli` / サブコマンド実装）をリンクし、cliconf のサンプルアプリと同じ
+`Config`（`title` / `settings.value` / `plugins` / `add` / `subtract` / `multiply` / `divide`）を
+そのまま利用しています。`cliconf::config` だけでは `kSubcommandMappings` が
+未定義シンボルになるため、`command_lib` も合わせてリンクする必要があります。
+
+```bash
+./build/app add 10 20
+./build/app --config build/_deps/cliconf-src/config/example.toml subtract 15 5
+```
+
 ## GNU make
 
 ninjaの代わりにmakeを利用したい場合は`CMakePresets.json`を以下のように修正してください。

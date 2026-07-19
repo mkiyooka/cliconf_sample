@@ -7,5 +7,8 @@
 #   )
 #   FetchContent_MakeAvailable(fmt)
 
-# 現在、メインアプリケーションではサードパーティライブラリを使用していません
-# 必要に応じてここにライブラリを追加してください
+add_external_package(cliconf ext/cliconf
+    GIT_REPOSITORY https://github.com/mkiyooka/cliconf.git
+    GIT_TAG main
+)
+FetchContent_MakeAvailable(cliconf)

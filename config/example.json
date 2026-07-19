@@ -1,0 +1,18 @@
+{
+    // JSONC: コメントも書ける
+    "mode": "development",
+    "timeout": 15,
+    "multiply": {
+        "a": 4,
+        "b": 8
+    },
+    "network": {
+        "retry": {
+            "count": 2
+        }
+    },
+    "subtract": {
+        "a": 20,
+        "b": 3
+    }
+}

@@ -42,8 +42,8 @@ pixi run test
 ## 実行
 
 ```bash
-# メインアプリケーション
-./build/app
+# メインアプリケーション（add / multiply / subtract サブコマンドを持つ。詳細は後述）
+./build/app --help
 
 # テスト個別実行
 ./build/tests/test_core
@@ -171,13 +171,48 @@ target_link_libraries(app
 `cliconf::cliconf` をリンクし、CLI11 / toml++ / nlohmann_json / fkYAML は
 config-system が内部でインクルードするため個別にリンクする必要があります。
 
-`app` は `add` サブコマンドを持ち、`--mode` / `--timeout` / `--config` はサブコマンド共通の
-オプションとして機能します。
+`app` は `add` / `multiply` / `subtract` の3つのサブコマンドを持ち、`--mode` / `--timeout` /
+`--config` はサブコマンド共通のオプションとして機能します。3つは設定ファイル連携の要否と
+方法がそれぞれ異なり、cliconf の config-system が提供する3通りのマッピング方式に対応します。
+
+| サブコマンド | 方式 | 設定ファイルからの読み込み | 実装 |
+| --- | --- | --- | --- |
+| `add` | CLIオンリー | 不可 | サブコマンドの位置引数のみ。`Config` には持たせない |
+| `multiply` | 自動マッピング | 可（`[multiply]` セクション） | `kConfigSchema` に `FieldDescriptor{"--multiply.a", "multiply.a", ...}` を1行登録するだけ |
+| `subtract` | 手動マッピング | 可（`[subtract]` セクション） | `Config::subtract` という入れ子構造体を `ExtraLoader`（`SubtractExtraLoader`）で手動読み込み |
+
+自動/手動を分ける基準は「設定ファイル側のネストの深さ」ではなく、**`Config` 構造体側が
+フラットかどうか**です。`FieldDescriptor` の第4引数（メンバーポインタ）は `Config` 直下の
+1フィールドしか指せません。`multiply_a` / `multiply_b` や `network_retry_count` は `Config`
+直下のフラットなメンバーなので、設定ファイル側が何階層ネストしていても
+（`[multiply]` の `a`/`b`、`[network.retry]` の `count` など）`config_key` にドット区切りの
+パスを書くだけで自動マッピングできます（`ResolveDottedKey` が段数に関わらず辿るため）。
+一方 `subtract` の `a` / `b` は `SubtractConfig` という入れ子構造体のメンバーで、
+`FieldDescriptor` は `&Config::subtract`（`SubtractConfig` 型全体）までしか指せず `a` / `b`
+を個別に指せないため、`ExtraLoader` で TOML / JSONC / YAML のパース結果から手動で
+読み出す必要があります。
+
+いずれも優先度は CLI引数 > 設定ファイル > デフォルト値です。
 
 ```bash
+# add: CLIオンリー
 ./build/app add 10 20
 ./build/app --mode production add 3 4
-./build/app --config config/example.toml add 1 2
+
+# multiply: 自動マッピング（kConfigSchema 経由でグローバルオプション --multiply.a / --multiply.b も使える）
+./build/app multiply                                  # デフォルト値 (0, 0) を使用 -> 0
+./build/app --config config/example.toml multiply     # 設定ファイルの [multiply] を使用 -> 42
+./build/app --config config/example.toml --multiply.a 5 multiply # CLI引数が設定ファイルを上書き -> 35
+
+# network.retry.count: 自動マッピング（2階層ネスト [network.retry] セクションの count）
+./build/app                                            # デフォルト値 3
+./build/app --config config/example.toml               # 設定ファイルの [network.retry] を使用 -> 5
+./build/app --config config/example.toml --network.retry.count 9 # CLI引数が上書き -> 9
+
+# subtract: 手動マッピング（ExtraLoader、CLI引数はサブコマンドの位置引数）
+./build/app subtract                                  # デフォルト値 (0, 0) を使用 -> 0
+./build/app --config config/example.toml subtract     # 設定ファイルの [subtract] を使用 -> 70
+./build/app --config config/example.toml subtract 5 2 # CLI引数が設定ファイルを上書き -> 3
 ```
 
 ## GNU make

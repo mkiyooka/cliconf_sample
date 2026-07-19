@@ -1,0 +1,14 @@
+mode: production
+timeout: 60
+
+multiply:
+  a: 3
+  b: 9
+
+network:
+  retry:
+    count: 4
+
+subtract:
+  a: 50
+  b: 8

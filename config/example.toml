@@ -1,2 +1,13 @@
 mode = "staging"
 timeout = 45
+
+[multiply]
+a = 6
+b = 7
+
+[network.retry]
+count = 5
+
+[subtract]
+a = 100
+b = 30

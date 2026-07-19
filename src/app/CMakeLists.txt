@@ -2,8 +2,12 @@ add_executable(app main.cpp)
 
 target_link_libraries(app
     PRIVATE core
-    PRIVATE cliconf::config
-    PRIVATE command_lib
+    PRIVATE CLI11::CLI11
+    PRIVATE fmt::fmt
+    PRIVATE tomlplusplus::tomlplusplus
+    PRIVATE nlohmann_json::nlohmann_json
+    PRIVATE fkYAML_target
+    PRIVATE cliconf::cliconf
 )
 
 # プリコンパイル済みヘッダーの設定

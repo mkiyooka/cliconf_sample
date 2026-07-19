@@ -125,6 +125,8 @@ pixi run valgrind
     - `app/`: 実行ファイル
 - `include/`: ヘッダーファイル
     - `myproject/core/`: プロジェクト公開API
+    - `config/`: cliconf config-system 向けの `Config` 構造体・スキーマ定義
+- `config/`: 設定ファイルのサンプル（TOML / JSONC / YAML）
 - `tests/`: テストコード
 - `cmake/`: CMake設定ファイル
     - `local-or-fetch.cmake`: FetchContentヘルパー
@@ -147,15 +149,35 @@ add_external_package(cliconf ext/cliconf
 FetchContent_MakeAvailable(cliconf)
 ```
 
-`src/app` では `cliconf::config`（config-system）と `command_lib`（cliconf本体の
-`RunCli` / サブコマンド実装）をリンクし、cliconf のサンプルアプリと同じ
-`Config`（`title` / `settings.value` / `plugins` / `add` / `subtract` / `multiply` / `divide`）を
-そのまま利用しています。`cliconf::config` だけでは `kSubcommandMappings` が
-未定義シンボルになるため、`command_lib` も合わせてリンクする必要があります。
+config-system は `ConfigManager<Config, Schema, ExtraLoader>` というヘッダオンリーの
+テンプレートで提供されており、アプリ固有の `Config` 構造体を自由に定義できます。
+このプロジェクトでは `include/config/config_loader.hpp`（`Config` 構造体）と
+`include/config/config_schema.hpp`（`kConfigSchema`）を定義し、`src/app/main.cpp` で
+`ConfigManager` を組み立てています。
+
+```cmake
+target_link_libraries(app
+    PRIVATE CLI11::CLI11
+    PRIVATE fmt::fmt
+    PRIVATE tomlplusplus::tomlplusplus
+    PRIVATE nlohmann_json::nlohmann_json
+    PRIVATE fkYAML_target
+    PRIVATE cliconf::cliconf
+)
+```
+
+`cliconf::config`（cliconf本体のサンプル用ターゲット、`config_validator.cpp` を含む）は
+アプリ固有の `Config` とは別物のためリンクしません。ヘッダオンリー部分だけを使う
+`cliconf::cliconf` をリンクし、CLI11 / toml++ / nlohmann_json / fkYAML は
+config-system が内部でインクルードするため個別にリンクする必要があります。
+
+`app` は `add` サブコマンドを持ち、`--mode` / `--timeout` / `--config` はサブコマンド共通の
+オプションとして機能します。
 
 ```bash
 ./build/app add 10 20
-./build/app --config build/_deps/cliconf-src/config/example.toml subtract 15 5
+./build/app --mode production add 3 4
+./build/app --config config/example.toml add 1 2
 ```
 
 ## GNU make

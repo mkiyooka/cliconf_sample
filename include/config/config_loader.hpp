@@ -2,46 +2,39 @@
 
 #include <string>
 
-// subtract サブコマンドの被演算子。スキーマの自動マッピングは Config 直下の
-// フラットなメンバーポインタしか扱えず、この入れ子構造体のメンバーには到達できない。
-// そのため設定ファイルの [subtract] セクションから ExtraLoader で手動読み込みする
-// (config_schema.hpp の SubtractExtraLoader を参照)。
-struct SubtractConfig {
-    int a = 0;
-    int b = 0;
+// serve サブコマンド専用の設定。ServeConfig 自体を Owner とする専用スキーマ
+// (kServeSchema)・専用の ConfigManager<ServeConfig, ...> を用意し、その
+// RegisterOptions() を serve サブコマンドの CLI::App にだけ呼ぶことで、
+// --serve.host 等のオプションがトップレベルの --help に出ないようにする
+// (config_schema.hpp の kServeSchema、main.cpp を参照)。
+struct ServeConfig {
+    std::string host = "0.0.0.0";
+    int port = 8080;
+    int workers = 4;
 };
 
-// divide サブコマンドの被演算子。SubtractConfig と同型だが読み込み方が異なる。
-// DivideConfig 自体を「Owner」とする専用の kDivideSchema / ConfigManager<DivideConfig, ...>
-// を用意し、config_key に "divide.a" のようにドット区切りで書けば [divide] セクションを
-// 自動マッピングできる(config_key のパス解決とメンバーポインタの Owner 型は独立して
-// いるため)。Config::divide にはその結果を代入するだけで、ExtraLoader は不要になる
-// (config_schema.hpp の kDivideSchema、main.cpp の divide 関連コードを参照)。
-struct DivideConfig {
-    int a = 0;
-    int b = 0;
+// connect サブコマンド専用の設定。endpoint はフラットなメンバーなので自動マッピング
+// できるが、retry(RetryConfig)は入れ子構造体のため ExtraLoader で手動読み込みする
+// (手動マッピング。config_schema.hpp の ConnectExtraLoader を参照)。
+struct RetryConfig {
+    int count = 3;
+    int interval_ms = 500;
+};
+
+struct ConnectConfig {
+    std::string endpoint = "localhost:9000";
+    int timeout_ms = 3000;
+    RetryConfig retry;
 };
 
 struct Config {
-    std::string mode = "default";
-    int timeout = 30;
+    // [app] セクション: アプリ全体設定。Config 直下のフラットなメンバーなので
+    // kConfigSchema に config_key "app.log_level" 等を1行登録するだけで自動マッピングされる。
+    std::string log_level = "info";
+    std::string log_output = "stdout";
 
-    // multiply サブコマンドの被演算子。Config 直下のフラットなメンバーなので、
-    // 設定ファイル側の [multiply] セクション(a/b)に対応する "multiply.a" /
-    // "multiply.b" という config_key を FieldDescriptor に登録するだけで
-    // 自動マッピングされる(kConfigSchema, 手動コード不要)。
-    int multiply_a = 0;
-    int multiply_b = 0;
-
-    // ドット区切りキーは段数に関わらず解決されるため(config_file_loader.hpp の
-    // ResolveDottedKey)、"network.retry.count" のように設定ファイル側が
-    // [network.retry] セクションの count という2階層ネストでも、Config 側は
-    // このフラットな1メンバーのままで自動マッピングできる。
-    int network_retry_count = 3;
-
-    SubtractConfig subtract;
-
-    // divide サブコマンドの被演算子。ConfigManager<DivideConfig, ...> によって
-    // [divide] セクションから自動マッピングされた結果を代入するだけの器（詳細は上記）。
-    DivideConfig divide;
+    // [cluster] セクション: モジュール単位の設定。アプリ全体設定と同様に
+    // Config 直下のフラットなメンバーとして扱える(自動マッピング)。
+    std::string cluster_name = "default";
+    int cluster_node_count = 1;
 };

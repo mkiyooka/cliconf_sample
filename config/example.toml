@@ -1,17 +1,20 @@
-mode = "staging"
-timeout = 45
+[app]
+log_level = "debug"
+log_output = "file"
 
-[multiply]
-a = 6
-b = 7
+[cluster]
+name = "prod-cluster"
+node_count = 5
 
-[network.retry]
-count = 5
+[serve]
+host = "127.0.0.1"
+port = 9090
+workers = 8
 
-[subtract]
-a = 100
-b = 30
+[connect]
+endpoint = "cluster.example.com:9000"
+timeout_ms = 5000
 
-[divide]
-a = 100
-b = 4
+[connect.retry]
+count = 10
+interval_ms = 1000

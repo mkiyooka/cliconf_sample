@@ -42,7 +42,7 @@ pixi run test
 ## 実行
 
 ```bash
-# メインアプリケーション（add / multiply / subtract / divide サブコマンドを持つ。詳細は後述）
+# メインアプリケーション（serve / connect サブコマンドを持つ。詳細は後述）
 ./build/app --help
 
 # テスト個別実行
@@ -123,9 +123,10 @@ pixi run valgrind
 - `src/`: ソースコード
     - `core/`: 共通ロジック
     - `app/`: 実行ファイル
+    - `config/`: `config_validator.cpp`（バリデーション実装）
 - `include/`: ヘッダーファイル
     - `myproject/core/`: プロジェクト公開API
-    - `config/`: cliconf config-system 向けの `Config` 構造体・スキーマ定義
+    - `config/`: cliconf config-system 向けの `Config` 構造体・スキーマ・バリデーション定義
 - `config/`: 設定ファイルのサンプル（TOML / JSONC / YAML）
 - `tests/`: テストコード
 - `cmake/`: CMake設定ファイル
@@ -151,8 +152,8 @@ FetchContent_MakeAvailable(cliconf)
 
 config-system は `ConfigManager<Config, Schema, ExtraLoader>` というヘッダオンリーの
 テンプレートで提供されており、アプリ固有の `Config` 構造体を自由に定義できます。
-このプロジェクトでは `include/config/config_loader.hpp`（`Config` 構造体）と
-`include/config/config_schema.hpp`（`kConfigSchema`）を定義し、`src/app/main.cpp` で
+このプロジェクトでは `include/config/config_loader.hpp`（`Config` 構造体群）と
+`include/config/config_schema.hpp`（スキーマ・`ExtraLoader`）を定義し、`src/app/main.cpp` で
 `ConfigManager` を組み立てています。
 
 ```cmake
@@ -171,76 +172,128 @@ target_link_libraries(app
 `cliconf::cliconf` をリンクし、CLI11 / toml++ / nlohmann_json / fkYAML は
 config-system が内部でインクルードするため個別にリンクする必要があります。
 
-`app` は `add` / `multiply` / `subtract` / `divide` の4つのサブコマンドを持ち、`--mode` /
-`--timeout` / `--config` はサブコマンド共通のオプションとして機能します。4つは設定ファイル
-連携の要否と方法がそれぞれ異なり、cliconf の config-system が提供するマッピング方式に対応します。
+### 設定の階層と対応する `ConfigManager`
 
-| サブコマンド | 方式 | 設定ファイルからの読み込み | 実装 |
+設定ファイルには、性質の異なる4種類の値が混在しがちです。このサンプルではそれぞれに
+対応する構造体・`ConfigManager` を分けています。計算処理などの機能は持たせず、
+設定値を構造体に読み込んで表示するだけの最小構成です。
+
+| 種類 | 設定ファイルの例 | 対応する構造体 | `ConfigManager` を登録する `CLI::App` |
 | --- | --- | --- | --- |
-| `add` | CLIオンリー | 不可 | サブコマンドの位置引数のみ。`Config` には持たせない |
-| `multiply` | 自動マッピング | 可（`[multiply]` セクション） | `kConfigSchema` に `FieldDescriptor{"--multiply.a", "multiply.a", ...}` を1行登録するだけ |
-| `subtract` | 手動マッピング | 可（`[subtract]` セクション） | `Config::subtract` という入れ子構造体を `ExtraLoader`（`SubtractExtraLoader`）で手動読み込み |
-| `divide` | 自動マッピング（別 `ConfigManager`） | 可（`[divide]` セクション） | `DivideConfig` を主語にした専用の `kDivideSchema` / `ConfigManager<DivideConfig, ...>` |
+| アプリ全体設定 | `[app]` の `log_level` / `log_output` | `Config`（`kConfigSchema`） | ルートの `app`（トップレベル `--help` に常に表示） |
+| モジュール単位設定 | `[cluster]` の `name` / `node_count` | 同上 | 同上 |
+| サブコマンド固有設定（自動マッピング） | `[serve]` の `host` / `port` / `workers` | `ServeConfig`（`kServeSchema`） | `serve` サブコマンドの `CLI::App` のみ |
+| サブコマンド固有設定（手動マッピング） | `[connect]` の `endpoint` / `timeout_ms` / `retry` | `ConnectConfig`（`kConnectSchema` + `ConnectExtraLoader`） | `connect` サブコマンドの `CLI::App` のみ |
 
-自動/手動を分ける基準は「設定ファイル側のネストの深さ」ではなく、**`FieldDescriptor` の
-`Owner`（メンバーポインタが指す構造体）が何であるかを`ConfigManager`のテンプレート引数
-`Config`と一致させられるかどうか**です。`FieldDescriptor` の第4引数（メンバーポインタ）は
-`Owner` 直下の1フィールドしか指せず、`ConfigManager<Config, Schema>` は常に
-`Config` 型インスタンスに対して `.*field.member` を呼びます。
+`ConfigManager::RegisterOptions()` はどの `CLI::App` に対して呼ぶかで、生成される
+オプションの所属スコープが決まります。ルートの `app` に登録すればグローバルオプションに、
+`app.add_subcommand(...)` が返す `CLI::App*` に登録すればそのサブコマンド専用の
+オプションになり、トップレベルの `--help` には出ません。
 
-- `multiply_a` / `multiply_b` や `network_retry_count` は `Config` 直下のフラットな
-  メンバーなので、そのまま `kConfigSchema`（`Owner = Config`）に登録するだけで自動
-  マッピングできます。設定ファイル側が何階層ネストしていても
-  （`[multiply]` の `a`/`b`、`[network.retry]` の `count` など）`config_key` にドット区切り
-  のパスを書けば `ResolveDottedKey` が段数に関わらず辿ってくれます。
-- `subtract` の `a` / `b` は `SubtractConfig` という `Config` の入れ子構造体のメンバーです。
-  `&Config::subtract`（`SubtractConfig` 型全体）を `FieldDescriptor` にそのまま渡して
-  構造体ごと自動マッピングすることはできません。実際に検証したところ2つの理由で
-  コンパイルエラーになります。(1) `ConfigManager<Config, ...>` は `Config` 型インスタンス
-  に対してしか `.*field.member` できないため、`Owner` を `SubtractConfig` にしても使えない。
-  (2) 仮に (1) を回避できたとしても `ResolveDottedKey` が最終的に呼ぶ
-  `toml::table::value<T>()` は `string`/`int64_t`/`double`/`bool` 等のネイティブ型しか
-  受け付けず、`T` が集約型だと `static_assert` で失敗します。そのため `ExtraLoader`
-  （`SubtractExtraLoader`）で TOML / JSONC / YAML のパース結果から手動で読み出します
-  （`config_schema.hpp` の `SubtractExtraLoader` 直前のコメントに詳細）。
-- `divide` の `a` / `b` も `DivideConfig` という入れ子構造体のメンバーですが、`subtract`
-  とは別の方法で自動マッピングしています。`config_key` のドット区切りパス解決と
-  `FieldDescriptor` の `Owner` 型は独立しているため、**`DivideConfig` それ自体を主語に
-  した専用のスキーマ `kDivideSchema`（`FieldDescriptor{"--divide.a", "divide.a", ...,
-  &DivideConfig::a}`）と、専用の `ConfigManager<DivideConfig, decltype(kDivideSchema)>`
-  を用意すれば、`[divide]` セクションを自動マッピングできます**。`main.cpp` では
-  `Config` 用と `DivideConfig` 用の2つの `ConfigManager` をそれぞれ `Resolve()` し、
-  結果を `Config::divide` に代入しています。ただしこの方式には次のトレードオフが
-  あります。(1) 同じ設定ファイル群を `ConfigManager` の数だけ独立に再パースすることになる。
-  (2) `Config` 自体はやはりフラットなままで、`DivideConfig` を保持するための入れ子
-  フィールド（`Config::divide`）自体は依然として `kConfigSchema` の対象外。
+```cpp
+// アプリ全体設定はルートに登録 -> トップレベル --help に表示される
+config::ConfigManager<Config, decltype(config::kConfigSchema)> config_manager{config::kConfigSchema};
+config_manager.RegisterOptions(app);
 
-いずれも優先度は CLI引数 > 設定ファイル > デフォルト値です。
+// serve 固有の設定は serve サブコマンドに登録 -> serve --help にのみ表示される
+CLI::App *serve = app.add_subcommand("serve", "...");
+config::ConfigManager<ServeConfig, decltype(config::kServeSchema)> serve_config_manager{config::kServeSchema};
+serve_config_manager.RegisterOptions(*serve);
+```
+
+### サブコマンド: `serve` / `connect`
+
+- `serve`: サーバー起動を模したサブコマンド。`host`/`port`/`workers` はいずれも
+  `ServeConfig` のフラットなメンバーなので、そのまま `kServeSchema`（`Owner = ServeConfig`）
+  に登録するだけで自動マッピングされます。
+- `connect`: リモート接続を模したサブコマンド。`endpoint`/`timeout_ms` は自動マッピング
+  しますが、リトライ設定 `retry`（`RetryConfig`、`count`/`interval_ms` を持つ入れ子構造体）は
+  スキーマの自動マッピング対象外（`FieldDescriptor` はスカラー値1個しか扱えず、
+  `toml::table::value<T>()` 等は集約型を受け付けないため）なので、`ConnectExtraLoader`
+  で手動読み込みします。`Resolve()` の戻り値にはスキーマ外フィールドは含まれないため、
+  `GetFileValues().retry` から明示的に取得してマージする必要がある点に注意してください。
+
+どちらのサブコマンドも計算や通信は一切行わず、設定値を検証（後述）した上でそのまま
+出力するだけです。優先度は CLI引数 > 設定ファイル > デフォルト値です。
 
 ```bash
-# add: CLIオンリー
-./build/app add 10 20
-./build/app --mode production add 3 4
+# serve: デフォルト値を使用
+./build/app serve
 
-# multiply: 自動マッピング（kConfigSchema 経由でグローバルオプション --multiply.a / --multiply.b も使える）
-./build/app multiply                                  # デフォルト値 (0, 0) を使用 -> 0
-./build/app --config config/example.toml multiply     # 設定ファイルの [multiply] を使用 -> 42
-./build/app --config config/example.toml --multiply.a 5 multiply # CLI引数が設定ファイルを上書き -> 35
+# 設定ファイルの [serve] セクション(host/port/workers)を使用
+./build/app --config config/example.toml serve
 
-# network.retry.count: 自動マッピング（2階層ネスト [network.retry] セクションの count）
-./build/app                                            # デフォルト値 3
-./build/app --config config/example.toml               # 設定ファイルの [network.retry] を使用 -> 5
-./build/app --config config/example.toml --network.retry.count 9 # CLI引数が上書き -> 9
+# serve サブコマンド固有のオプションで port を上書き（CLI引数が最優先）
+./build/app --config config/example.toml serve --port 12345
 
-# subtract: 手動マッピング（ExtraLoader、CLI引数はサブコマンドの位置引数）
-./build/app subtract                                  # デフォルト値 (0, 0) を使用 -> 0
-./build/app --config config/example.toml subtract     # 設定ファイルの [subtract] を使用 -> 70
-./build/app --config config/example.toml subtract 5 2 # CLI引数が設定ファイルを上書き -> 3
+# connect: デフォルト値を使用
+./build/app connect
 
-# divide: 自動マッピング（DivideConfig 専用の ConfigManager、グローバルオプション --divide.a / --divide.b も使える）
-./build/app divide                                    # デフォルト値 (0, 0) はゼロ除算エラー
-./build/app --config config/example.toml divide       # 設定ファイルの [divide] を使用 -> 25
-./build/app --config config/example.toml --divide.b 5 divide # CLI引数が設定ファイルを上書き -> 20
+# 設定ファイルの [connect] / [connect.retry] セクションを使用
+./build/app --config config/example.toml connect
+```
+
+### `--help` の階層
+
+`serve`/`connect` 固有のオプション（`--host`/`--port`/`--workers`、
+`--endpoint`/`--timeout-ms`）は、対応する `ConfigManager::RegisterOptions()` を
+そのサブコマンドの `CLI::App` にのみ呼んでいるため、トップレベルの `--help` には出ません。
+
+```text
+$ ./build/app --help
+OPTIONS:
+  -h,     --help              Print this help message and exit
+  -c,     --config TEXT ...   Configuration file(s)
+          --log-level TEXT    Log level (debug/info/warn/error)
+          --log-output TEXT   Log output destination (stdout/file)
+          --cluster.name TEXT Cluster name
+          --cluster.node-count INT
+                              Number of nodes in the cluster
+
+SUBCOMMANDS:
+  serve                       Start the server
+  connect                     Connect to a remote endpoint
+
+$ ./build/app serve --help
+OPTIONS:
+  -h,     --help              Print this help message and exit
+          --host TEXT         Bind address
+          --port INT          Listen port
+          --workers INT       Number of worker threads
+```
+
+### バリデーション（`include/config/config_validator.hpp`）
+
+`ConfigManager::Resolve()` はスキーマの型（`int`/`double`/`std::string` 等）や
+ファイルのパース可否は検証しますが、`port` が有効な範囲か・`endpoint` が空でないかと
+いった「値の意味」までは検証しません。この種のバリデーションは `Resolve()` の後、
+アプリ側で行う必要があります。このサンプルでは2つのパターンを実演しています。
+
+| パターン | 対象 | 型 | 特徴 |
+| --- | --- | --- | --- |
+| 同一型を検証する `Validate` 関数 | `serve` | `ValidateServeConfig(const ServeConfig&) -> std::string` | cliconf 本体の `Validate(const Config&)` と同じ形。空文字列なら成功。実装コストが低いが、`Validate()` の呼び忘れを型では防げない |
+| `Raw` → `Parsed` の変換 | `connect` | `ParsedConnectConfig::Parse(const ConnectConfig&) -> compat::expected<ParsedConnectConfig, std::string>` | 検証を通過しない限り `ParsedConnectConfig` を作れない（コンストラクタが非公開）。以降のコードは「検証済みの値」であることを型で保証された状態で扱える |
+
+```cpp
+// パターン1: serve
+const std::string error = config::ValidateServeConfig(serve_conf);
+if (!error.empty()) {
+    fmt::print(stderr, "Error: {}\n", error);
+    return 1;
+}
+
+// パターン2: connect（cliconf::cliconf が提供する compat::expected を使用）
+const auto parsed = config::ParsedConnectConfig::Parse(connect_conf);
+if (!parsed.has_value()) {
+    fmt::print(stderr, "Error: {}\n", parsed.error());
+    return 1;
+}
+fmt::print("connect.endpoint: {}\n", parsed->Endpoint());
+```
+
+```bash
+./build/app serve --port 99999    # Error: serve.port must be in [1, 65535], got 99999
+./build/app connect --endpoint "" # Error: connect.endpoint must not be empty
 ```
 
 ## GNU make

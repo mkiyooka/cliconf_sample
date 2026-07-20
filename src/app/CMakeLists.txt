@@ -1,7 +1,6 @@
-add_executable(app main.cpp)
+add_executable(app main.cpp ${CMAKE_SOURCE_DIR}/src/config/config_validator.cpp)
 
 target_link_libraries(app
-    PRIVATE core
     PRIVATE CLI11::CLI11
     PRIVATE fmt::fmt
     PRIVATE tomlplusplus::tomlplusplus

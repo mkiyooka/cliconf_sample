@@ -1,22 +1,24 @@
 {
     // JSONC: コメントも書ける
-    "mode": "development",
-    "timeout": 15,
-    "multiply": {
-        "a": 4,
-        "b": 8
+    "app": {
+        "log_level": "warn",
+        "log_output": "stdout"
     },
-    "network": {
+    "cluster": {
+        "name": "staging-cluster",
+        "node_count": 3
+    },
+    "serve": {
+        "host": "0.0.0.0",
+        "port": 9091,
+        "workers": 4
+    },
+    "connect": {
+        "endpoint": "json.example.com:9001",
+        "timeout_ms": 2000,
         "retry": {
-            "count": 2
+            "count": 5,
+            "interval_ms": 200
         }
-    },
-    "subtract": {
-        "a": 20,
-        "b": 3
-    },
-    "divide": {
-        "a": 30,
-        "b": 6
     }
 }

@@ -11,76 +11,77 @@
 
 namespace config {
 
-// 各エントリを1行登録するだけで CLI11 オプション登録・TOML/JSONC/YAML 読み込み・
-// 優先度解決(CLI > 設定ファイル > デフォルト)が ConfigManager によって自動化される。
-// config_key はドット区切りで何段でもネストできる(multiply.a、network.retry.count 等)。
-// 詳細は Config (config_loader.hpp) 側のコメントを参照。
+// アプリ全体・モジュール単位の設定。各エントリを1行登録するだけで CLI11 オプション登録・
+// TOML/JSONC/YAML 読み込み・優先度解決(CLI > 設定ファイル > デフォルト)が
+// ConfigManager によって自動化される(自動マッピング)。
+// config_key はドット区切りで何段でもネストできるため、[app] セクションの log_level と
+// [cluster] セクションの name/node_count のように論理的な区分が違っても、Config は
+// どちらもフラットなメンバーのままでよい。
 inline constexpr auto kConfigSchema = std::make_tuple(
-    FieldDescriptor{"--mode", "mode", "Operation mode", &Config::mode},
-    FieldDescriptor{"--timeout", "timeout", "Timeout in seconds", &Config::timeout},
-    FieldDescriptor{"--multiply.a", "multiply.a", "Multiplicand (overrides config file)", &Config::multiply_a},
-    FieldDescriptor{"--multiply.b", "multiply.b", "Multiplier (overrides config file)", &Config::multiply_b},
+    FieldDescriptor{"--log-level", "app.log_level", "Log level (debug/info/warn/error)", &Config::log_level},
+    FieldDescriptor{"--log-output", "app.log_output", "Log output destination (stdout/file)", &Config::log_output},
+    FieldDescriptor{"--cluster.name", "cluster.name", "Cluster name", &Config::cluster_name},
     FieldDescriptor{
-        "--network.retry.count", "network.retry.count", "Retry count (2-level nested key)", &Config::network_retry_count
+        "--cluster.node-count", "cluster.node_count", "Number of nodes in the cluster", &Config::cluster_node_count
     }
 );
 
-// subtract サブコマンドの a/b はスキーマで自動マッピングできない入れ子構造体のため、
-// ExtraLoader で設定ファイルの [subtract] セクションから読み込む。
-//
-// なぜ FieldDescriptor で SubtractConfig 全体（&Config::subtract）を指定できないか:
-// 1) ConfigManager::RegisterOptions / Resolve は常に "Config型インスタンス.*field.member"
-//    という形で参照するため、field.member は T Config::* でなければコンパイルできない
-//    （FieldDescriptor<Owner, T> の Owner を SubtractConfig にしても Config に対して
-//    使えない）。
-// 2) 仮に(1)を回避できても、ResolveDottedKey は最終的に toml::table::value<T>() 等を
-//    呼ぶが、toml++ の value<T>() は string/int64_t/double/bool 等のネイティブ型しか
-//    受け付けず、T が SubtractConfig のような集約型だと static_assert でコンパイル
-//    エラーになる。
-// つまり自動マッピングの単位は常にスカラー値1個であり、構造体をまるごとマッピングする
-// ことはできない。
-struct SubtractExtraLoader {
-    void LoadToml(const toml::table &tbl, Config &conf) const {
-        if (const auto *sub = tbl["subtract"].as_table()) {
-            conf.subtract.a = (*sub)["a"].value_or(0);
-            conf.subtract.b = (*sub)["b"].value_or(0);
+// serve サブコマンド専用スキーマ。ServeConfig を Owner とする専用の
+// ConfigManager<ServeConfig, decltype(kServeSchema)> を main.cpp で用意し、
+// その RegisterOptions() を serve サブコマンドの CLI::App にだけ呼ぶことで、
+// --serve.host 等のオプションをトップレベルの --help から隠せる(自動マッピング)。
+inline constexpr auto kServeSchema = std::make_tuple(
+    FieldDescriptor{"--host", "serve.host", "Bind address", &ServeConfig::host},
+    FieldDescriptor{"--port", "serve.port", "Listen port", &ServeConfig::port},
+    FieldDescriptor{"--workers", "serve.workers", "Number of worker threads", &ServeConfig::workers}
+);
+
+// connect サブコマンド専用スキーマ。endpoint/timeout_ms は自動マッピングするが、
+// retry(RetryConfig)はスキーマ外フィールドのため ConnectExtraLoader で
+// 手動読み込みする(手動マッピング。詳細は下記コメント参照)。
+inline constexpr auto kConnectSchema = std::make_tuple(
+    FieldDescriptor{"--endpoint", "connect.endpoint", "Remote endpoint", &ConnectConfig::endpoint},
+    FieldDescriptor{"--timeout-ms", "connect.timeout_ms", "Connection timeout (ms)", &ConnectConfig::timeout_ms}
+);
+
+// なぜ retry を FieldDescriptor で自動マッピングできないか:
+// FieldDescriptor<Owner, T> の T は最終的に toml::table::value<T>() 等で解決される
+// (config_file_loader.hpp の ResolveDottedKey)。toml++ の value<T>() は
+// string/int64_t/double/bool 等のネイティブ型しか受け付けず、T が RetryConfig の
+// ような集約型だと static_assert でコンパイルエラーになる。そのためネストした
+// 構造体はスキーマの対象外とし、ExtraLoader で生のパース結果から読み出す。
+struct ConnectExtraLoader {
+    void LoadToml(const toml::table &tbl, ConnectConfig &conf) const {
+        if (const auto *retry = tbl["connect"]["retry"].as_table()) {
+            conf.retry.count = (*retry)["count"].value_or(conf.retry.count);
+            conf.retry.interval_ms = (*retry)["interval_ms"].value_or(conf.retry.interval_ms);
         }
     }
 
-    void LoadJson(const nlohmann::json &j, Config &conf) const {
-        if (j.contains("subtract") && j.at("subtract").is_object()) {
-            const auto &sub = j.at("subtract");
-            conf.subtract.a = sub.value("a", 0);
-            conf.subtract.b = sub.value("b", 0);
+    void LoadJson(const nlohmann::json &j, ConnectConfig &conf) const {
+        if (j.contains("connect") && j.at("connect").contains("retry")) {
+            const auto &retry = j.at("connect").at("retry");
+            conf.retry.count = retry.value("count", conf.retry.count);
+            conf.retry.interval_ms = retry.value("interval_ms", conf.retry.interval_ms);
         }
     }
 
-    void LoadYaml(const fkyaml::node &root, Config &conf) const {
-        if (root.is_mapping() && root.contains("subtract")) {
-            const auto &sub = root.at("subtract");
-            if (sub.is_mapping()) {
-                if (sub.contains("a")) {
-                    conf.subtract.a = sub.at("a").get_value<int>();
-                }
-                if (sub.contains("b")) {
-                    conf.subtract.b = sub.at("b").get_value<int>();
+    void LoadYaml(const fkyaml::node &root, ConnectConfig &conf) const {
+        if (root.is_mapping() && root.contains("connect")) {
+            const auto &connect = root.at("connect");
+            if (connect.is_mapping() && connect.contains("retry")) {
+                const auto &retry = connect.at("retry");
+                if (retry.is_mapping()) {
+                    if (retry.contains("count")) {
+                        conf.retry.count = retry.at("count").get_value<int>();
+                    }
+                    if (retry.contains("interval_ms")) {
+                        conf.retry.interval_ms = retry.at("interval_ms").get_value<int>();
+                    }
                 }
             }
         }
     }
 };
-
-// divide サブコマンドの被演算子(DivideConfig)を自動マッピングするための専用スキーマ。
-// FieldDescriptor<Owner, T> の Owner を Config ではなく DivideConfig にできるため、
-// DivideConfig を主語にした ConfigManager<DivideConfig, decltype(kDivideSchema)> を
-// main.cpp で別途 Resolve() すれば、config_key のドット区切りパス("divide.a")経由で
-// [divide] セクションを ExtraLoader なしで自動マッピングできる。
-// (subtract との違い: subtract は Config::subtract という「Config のメンバー」を
-//  スキーマ化しようとして失敗する一方、divide は DivideConfig それ自体を主語にした
-//  別のスキーマ・ConfigManager を用意することで自動マッピングを実現している。)
-inline constexpr auto kDivideSchema = std::make_tuple(
-    FieldDescriptor{"--divide.a", "divide.a", "Dividend (overrides config file)", &DivideConfig::a},
-    FieldDescriptor{"--divide.b", "divide.b", "Divisor (overrides config file)", &DivideConfig::b}
-);
 
 } // namespace config

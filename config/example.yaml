@@ -1,18 +1,19 @@
-mode: production
-timeout: 60
+app:
+  log_level: error
+  log_output: file
 
-multiply:
-  a: 3
-  b: 9
+cluster:
+  name: dev-cluster
+  node_count: 1
 
-network:
+serve:
+  host: localhost
+  port: 9092
+  workers: 2
+
+connect:
+  endpoint: yaml.example.com:9002
+  timeout_ms: 1000
   retry:
-    count: 4
-
-subtract:
-  a: 50
-  b: 8
-
-divide:
-  a: 40
-  b: 5
+    count: 2
+    interval_ms: 100

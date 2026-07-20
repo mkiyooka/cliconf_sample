@@ -34,6 +34,20 @@ CLI::App *SetupConnectCommand(
     return connect;
 }
 
+// nodes: nodes_csv は自動マッピング(kNodesSchema)。nodes(std::vector<NodeRecord>)は
+// NodesExtraLoader::LoadCsv が nodes_csv の指す CSV ファイルを読み込んで書き込む
+// (CSVを設定の一部として扱う例)。LoadCsv は Resolve() の最後に呼ばれ、結果は
+// Resolve() の戻り値に直接反映されるため、subtract/connect の retry のように
+// GetFileValues() から手動マージする必要はない。
+CLI::App *SetupNodesCommand(
+    CLI::App &app,
+    config::ConfigManager<NodesConfig, decltype(config::kNodesSchema), config::NodesExtraLoader> &config_manager
+) {
+    CLI::App *nodes = app.add_subcommand("nodes", "List cluster nodes loaded from a CSV file");
+    config_manager.RegisterOptions(*nodes);
+    return nodes;
+}
+
 } // namespace
 
 int main(int argc, char *argv[]) {
@@ -55,6 +69,11 @@ int main(int argc, char *argv[]) {
     config::ConfigManager<ConnectConfig, decltype(config::kConnectSchema), config::ConnectExtraLoader>
         connect_config_manager{config::kConnectSchema, config::ConnectExtraLoader{}};
     const CLI::App *const connect_cmd = SetupConnectCommand(app, connect_config_manager);
+
+    config::ConfigManager<NodesConfig, decltype(config::kNodesSchema), config::NodesExtraLoader> nodes_config_manager{
+        config::kNodesSchema, config::NodesExtraLoader{}
+    };
+    const CLI::App *const nodes_cmd = SetupNodesCommand(app, nodes_config_manager);
 
     try {
         app.parse(argc, argv);
@@ -104,6 +123,14 @@ int main(int argc, char *argv[]) {
             fmt::print("connect.timeout_ms: {}\n", parsed->TimeoutMs());
             fmt::print("connect.retry.count: {}\n", parsed->Retry().count);
             fmt::print("connect.retry.interval_ms: {}\n", parsed->Retry().interval_ms);
+        } else if (*nodes_cmd) {
+            // nodes は NodesExtraLoader::LoadCsv が Resolve() の最後に nodes_csv を
+            // 読み込んで書き込むため、戻り値の nodes にそのまま CSV の内容が入っている。
+            const NodesConfig nodes_conf = nodes_config_manager.Resolve(config_files);
+            fmt::print("nodes.csv: {}\n", nodes_conf.nodes_csv);
+            for (const auto &node : nodes_conf.nodes) {
+                fmt::print("  host={} weight={}\n", node.host, node.weight);
+            }
         }
     } catch (const std::exception &e) {
         fmt::print(stderr, "Error: {}\n", e.what());

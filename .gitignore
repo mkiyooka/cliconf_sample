@@ -209,3 +209,6 @@ debug/
 # Other files to ignore
 .DS_Store
 *.swp
+
+# Local override for FetchContent (see cmake/local-or-fetch.cmake)
+/ext/

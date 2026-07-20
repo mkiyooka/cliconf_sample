@@ -1,0 +1,4 @@
+host,weight,enabled
+node1.example.com,1.0,1
+node2.example.com,2.5,1
+node3.example.com,1.5,0

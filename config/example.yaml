@@ -17,3 +17,6 @@ connect:
   retry:
     count: 2
     interval_ms: 100
+
+nodes:
+  csv: config/nodes.csv

@@ -42,7 +42,7 @@ pixi run test
 ## 実行
 
 ```bash
-# メインアプリケーション（serve / connect サブコマンドを持つ。詳細は後述）
+# メインアプリケーション（serve / connect / nodes サブコマンドを持つ。詳細は後述）
 ./build/app --help
 
 # テスト個別実行
@@ -127,7 +127,7 @@ pixi run valgrind
 - `include/`: ヘッダーファイル
     - `myproject/core/`: プロジェクト公開API
     - `config/`: cliconf config-system 向けの `Config` 構造体・スキーマ・バリデーション定義
-- `config/`: 設定ファイルのサンプル（TOML / JSONC / YAML）
+- `config/`: 設定ファイルのサンプル（TOML / JSONC / YAML）、`nodes` サブコマンド用の CSV サンプル
 - `tests/`: テストコード
 - `cmake/`: CMake設定ファイル
     - `local-or-fetch.cmake`: FetchContentヘルパー
@@ -174,7 +174,7 @@ config-system が内部でインクルードするため個別にリンクする
 
 ### 設定の階層と対応する `ConfigManager`
 
-設定ファイルには、性質の異なる4種類の値が混在しがちです。このサンプルではそれぞれに
+設定ファイルには、性質の異なる値が混在しがちです。このサンプルではそれぞれに
 対応する構造体・`ConfigManager` を分けています。計算処理などの機能は持たせず、
 設定値を構造体に読み込んで表示するだけの最小構成です。
 
@@ -184,6 +184,7 @@ config-system が内部でインクルードするため個別にリンクする
 | モジュール単位設定 | `[cluster]` の `name` / `node_count` | 同上 | 同上 |
 | サブコマンド固有設定（自動マッピング） | `[serve]` の `host` / `port` / `workers` | `ServeConfig`（`kServeSchema`） | `serve` サブコマンドの `CLI::App` のみ |
 | サブコマンド固有設定（手動マッピング） | `[connect]` の `endpoint` / `timeout_ms` / `retry` | `ConnectConfig`（`kConnectSchema` + `ConnectExtraLoader`） | `connect` サブコマンドの `CLI::App` のみ |
+| サブコマンド固有設定（CSVを設定として扱う） | `[nodes]` の `csv`（CSVファイルパス） | `NodesConfig`（`kNodesSchema` + `NodesExtraLoader::LoadCsv`） | `nodes` サブコマンドの `CLI::App` のみ |
 
 `ConfigManager::RegisterOptions()` はどの `CLI::App` に対して呼ぶかで、生成される
 オプションの所属スコープが決まります。ルートの `app` に登録すればグローバルオプションに、
@@ -201,7 +202,7 @@ config::ConfigManager<ServeConfig, decltype(config::kServeSchema)> serve_config_
 serve_config_manager.RegisterOptions(*serve);
 ```
 
-### サブコマンド: `serve` / `connect`
+### サブコマンド: `serve` / `connect` / `nodes`
 
 - `serve`: サーバー起動を模したサブコマンド。`host`/`port`/`workers` はいずれも
   `ServeConfig` のフラットなメンバーなので、そのまま `kServeSchema`（`Owner = ServeConfig`）
@@ -212,8 +213,18 @@ serve_config_manager.RegisterOptions(*serve);
   `toml::table::value<T>()` 等は集約型を受け付けないため）なので、`ConnectExtraLoader`
   で手動読み込みします。`Resolve()` の戻り値にはスキーマ外フィールドは含まれないため、
   `GetFileValues().retry` から明示的に取得してマージする必要がある点に注意してください。
+- `nodes`: クラスタのノード一覧を CSV ファイルから読み込むサブコマンド。CSV ファイルパス
+  `nodes_csv` は `NodesConfig` のフラットなメンバーなので `kNodesSchema` に登録するだけで
+  自動マッピングされ、CLI（`--nodes-csv`）や設定ファイルの `[nodes]` セクションで
+  切り替えられます。ノード一覧 `nodes`（`std::vector<NodeRecord>`）はスキーマの自動
+  マッピング対象外のため、`NodesExtraLoader::LoadCsv` が `nodes_csv` の指す CSV
+  ファイルを読み込んで書き込みます。`LoadCsv` は他の `Load{Toml,Json,Yaml}` と異なり
+  `ConfigManager::Resolve()` の最後（スキーマ・CLI 解決が完了した後）に一度だけ
+  呼ばれるため、`nodes_csv` は CLI 引数や設定ファイルで上書きされた最終的な値が
+  確定した状態で読み込めます。また `Resolve()` の戻り値に直接書き込まれるため、
+  `connect` の `retry` と異なり `GetFileValues()` からの手動マージは不要です。
 
-どちらのサブコマンドも計算や通信は一切行わず、設定値を検証（後述）した上でそのまま
+いずれのサブコマンドも計算や通信は一切行わず、設定値を検証（後述）した上でそのまま
 出力するだけです。優先度は CLI引数 > 設定ファイル > デフォルト値です。
 
 ```bash
@@ -231,13 +242,20 @@ serve_config_manager.RegisterOptions(*serve);
 
 # 設定ファイルの [connect] / [connect.retry] セクションを使用
 ./build/app --config config/example.toml connect
+
+# nodes: CLI引数で CSV ファイルパスを指定
+./build/app nodes --nodes-csv config/nodes.csv
+
+# 設定ファイルの [nodes] セクション(csv)経由でパスを指定
+./build/app --config config/example.toml nodes
 ```
 
 ### `--help` の階層
 
-`serve`/`connect` 固有のオプション（`--host`/`--port`/`--workers`、
-`--endpoint`/`--timeout-ms`）は、対応する `ConfigManager::RegisterOptions()` を
-そのサブコマンドの `CLI::App` にのみ呼んでいるため、トップレベルの `--help` には出ません。
+`serve`/`connect`/`nodes` 固有のオプション（`--host`/`--port`/`--workers`、
+`--endpoint`/`--timeout-ms`、`--nodes-csv`）は、対応する
+`ConfigManager::RegisterOptions()` をそのサブコマンドの `CLI::App` にのみ
+呼んでいるため、トップレベルの `--help` には出ません。
 
 ```text
 $ ./build/app --help
@@ -253,6 +271,7 @@ OPTIONS:
 SUBCOMMANDS:
   serve                       Start the server
   connect                     Connect to a remote endpoint
+  nodes                       List cluster nodes loaded from a CSV file
 
 $ ./build/app serve --help
 OPTIONS:
@@ -260,6 +279,11 @@ OPTIONS:
           --host TEXT         Bind address
           --port INT          Listen port
           --workers INT       Number of worker threads
+
+$ ./build/app nodes --help
+OPTIONS:
+  -h,     --help              Print this help message and exit
+          --nodes-csv TEXT    Path to a CSV file listing cluster nodes
 ```
 
 ### バリデーション（`include/config/config_validator.hpp`）

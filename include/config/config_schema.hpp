@@ -3,6 +3,7 @@
 #include <tuple>
 
 #include <cliconf/field_descriptor.hpp>
+#include <cliconf/utility/csv_wrapper.hpp>
 #include <fkYAML/node.hpp>
 #include <nlohmann/json.hpp>
 #include <toml++/toml.hpp>
@@ -80,6 +81,46 @@ struct ConnectExtraLoader {
                     }
                 }
             }
+        }
+    }
+
+    // connect は CSV を扱わないため no-op。ExtraLoader は4メソッドすべての実装が
+    // 必須(NoExtraLoader のような既定実装は提供されない)。
+    void LoadCsv(ConnectConfig & /*conf*/) const {}
+};
+
+// nodes サブコマンド専用スキーマ。nodes_csv は Config 直下のフラットなメンバーなので
+// kNodesSchema に登録するだけで自動マッピングされる(CLI --nodes-csv でも上書き可能)。
+inline constexpr auto kNodesSchema = std::make_tuple(
+    FieldDescriptor{"--nodes-csv", "nodes.csv", "Path to a CSV file listing cluster nodes", &NodesConfig::nodes_csv}
+);
+
+// nodes(std::vector<NodeRecord>)はスキーマの自動マッピング対象外のため、
+// ExtraLoader::LoadCsv で nodes_csv が指す CSV ファイルを読み込む。
+// LoadCsv は Resolve() の最後、スキーマ・CLI 解決が完了した後に呼ばれるため、
+// nodes_csv は CLI / 設定ファイルで上書きされた最終的な値が確定した状態で読み込める。
+// TOML/JSONC/YAML はこのサブコマンドでは扱わないため LoadToml/LoadJson/LoadYaml は no-op。
+struct NodesExtraLoader {
+    void LoadToml(const toml::table & /*tbl*/, NodesConfig & /*conf*/) const {}
+    void LoadJson(const nlohmann::json & /*j*/, NodesConfig & /*conf*/) const {}
+    void LoadYaml(const fkyaml::node & /*root*/, NodesConfig & /*conf*/) const {}
+
+    void LoadCsv(NodesConfig &conf) const {
+        if (conf.nodes_csv.empty()) {
+            return;
+        }
+        utility::CsvReader reader(conf.nodes_csv);
+        auto hosts = reader.ReadFilteredAsStrings(
+            [](const csv::CSVRow &row) { return row["enabled"].get<int>() == 1; }, {"host"}
+        );
+        auto weights =
+            reader.ReadFiltered([](const csv::CSVRow &row) { return row["enabled"].get<int>() == 1; }, {"weight"});
+        if (!hosts.has_value() || !weights.has_value() || hosts->size() != weights->size()) {
+            return;
+        }
+        conf.nodes.clear();
+        for (std::size_t i = 0; i < hosts->size(); ++i) {
+            conf.nodes.push_back(NodeRecord{(*hosts)[i], (*weights)[i]});
         }
     }
 };

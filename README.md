@@ -145,10 +145,28 @@ CLI11 を統合する config-system を利用しています。設定は `cmake/
 ```cmake
 add_external_package(cliconf ext/cliconf
     GIT_REPOSITORY https://github.com/mkiyooka/cliconf.git
-    GIT_TAG main
+    GIT_TAG v0.1.0
 )
 FetchContent_MakeAvailable(cliconf)
 ```
+
+cliconf v0.1.0 では `ConfigManager::Resolve()` は例外を投げず、`config::LoadResult<T>`
+（`compat::expected<T, config::LoadError>`）を返します。設定ファイルが開けない・構文エラー・
+型不一致などは `LoadError` として返り、`Format()` で `"<file>: key '<key>': <message>"` 形式の
+文字列が得られます。`code`（`config::LoadErrc`: `IoError` / `ParseError` / `TypeMismatch` /
+`UnsupportedFormat` / `AmbiguousDefault` / `ManifestCycle`）で分類も判定できます。
+
+```cpp
+const auto resolved = config_manager.Resolve(config_files);
+if (!resolved) {
+    fmt::print(stderr, "Error: {}\n", resolved.error().Format());
+    return 1;
+}
+// *resolved / resolved->field で値にアクセスする
+```
+
+ExtraLoader（利用者側のコード）が投げた例外はローダで捕捉されずそのまま伝播するため、
+このサンプルでは `main()` で `std::exception` を受け止めて `Fatal:` と終了コード 2 で終えています。
 
 config-system は `ConfigManager<Config, Schema, ExtraLoader>` というヘッダオンリーの
 テンプレートで提供されており、アプリ固有の `Config` 構造体を自由に定義できます。
@@ -295,14 +313,13 @@ OPTIONS:
 
 | パターン | 対象 | 型 | 特徴 |
 | --- | --- | --- | --- |
-| 同一型を検証する `Validate` 関数 | `serve` | `ValidateServeConfig(const ServeConfig&) -> std::string` | cliconf 本体の `Validate(const Config&)` と同じ形。空文字列なら成功。実装コストが低いが、`Validate()` の呼び忘れを型では防げない |
+| 同一型を検証する `Validate` 関数 | `serve` | `ValidateServeConfig(const ServeConfig&) -> compat::expected<void, std::string>` | cliconf 本体の `Validate(const Config&)` と同じ形。成功なら値なし、失敗なら `unexpected` にメッセージ。実装コストが低いが、`Validate()` の呼び忘れを型では防げない |
 | `Raw` → `Parsed` の変換 | `connect` | `ParsedConnectConfig::Parse(const ConnectConfig&) -> compat::expected<ParsedConnectConfig, std::string>` | 検証を通過しない限り `ParsedConnectConfig` を作れない（コンストラクタが非公開）。以降のコードは「検証済みの値」であることを型で保証された状態で扱える |
 
 ```cpp
 // パターン1: serve
-const std::string error = config::ValidateServeConfig(serve_conf);
-if (!error.empty()) {
-    fmt::print(stderr, "Error: {}\n", error);
+if (const auto valid = config::ValidateServeConfig(serve_conf); !valid) {
+    fmt::print(stderr, "Error: {}\n", valid.error());
     return 1;
 }
 

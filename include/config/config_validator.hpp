@@ -10,11 +10,11 @@ namespace config {
 
 // --- パターン1: 同一型を検証する Validate 関数（cliconf 本体の Validate(const Config&)
 // と同じ形）---
-// ServeConfig をそのまま検証する。不正な場合はエラーメッセージを返し、
-// 正常な場合は空文字列を返す。呼び出し側は Resolve() 直後にこの関数へ通すだけでよく、
-// 型を分けないぶん実装コストが低い。ただし「検証済みかどうか」は型からは分からず、
-// 呼び出し側が Validate() を呼び忘れても検出できない。
-std::string ValidateServeConfig(const ServeConfig &conf);
+// ServeConfig をそのまま検証する。正常なら成功、不正ならエラーメッセージを
+// compat::expected<void, std::string> で返す（cliconf v0.1.0 の Validate と同じ戻り値型）。
+// 呼び出し側は Resolve() 直後にこの関数へ通すだけでよく、型を分けないぶん実装コストが低い。
+// ただし「検証済みかどうか」は型からは分からず、呼び出し側が Validate() を呼び忘れても検出できない。
+compat::expected<void, std::string> ValidateServeConfig(const ServeConfig &conf);
 
 // --- パターン2: 検証済みであることを型で表現する Raw -> Parsed 変換 ---
 // ConnectConfig（Resolve() 直後の未検証の値）を受け取り、検証を通過した場合のみ

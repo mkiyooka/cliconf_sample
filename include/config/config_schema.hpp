@@ -84,8 +84,9 @@ struct ConnectExtraLoader {
         }
     }
 
-    // connect は CSV を扱わないため no-op。ExtraLoader は4メソッドすべての実装が
-    // 必須(NoExtraLoader のような既定実装は提供されない)。
+    // connect は CSV を扱わないため no-op。ExtraLoader を渡す場合は 4 メソッドすべてを
+    // 実装する(スキーマ外フィールドが無ければ既定の config::NoExtraLoader をそのまま使える)。
+    // ExtraLoader 内で投げた例外はローダで捕捉されず伝播するため、main() で受け止める。
     void LoadCsv(ConnectConfig & /*conf*/) const {}
 };
 

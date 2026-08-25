@@ -4,15 +4,15 @@
 
 namespace config {
 
-std::string ValidateServeConfig(const ServeConfig &conf) {
+compat::expected<void, std::string> ValidateServeConfig(const ServeConfig &conf) {
     if (conf.port < 1 || conf.port > 65535) {
-        return fmt::format("serve.port must be in [1, 65535], got {}", conf.port);
+        return compat::unexpected(fmt::format("serve.port must be in [1, 65535], got {}", conf.port));
     }
     if (conf.workers < 1) {
-        return fmt::format("serve.workers must be positive, got {}", conf.workers);
+        return compat::unexpected(fmt::format("serve.workers must be positive, got {}", conf.workers));
     }
     if (conf.host.empty()) {
-        return "serve.host must not be empty";
+        return compat::unexpected(std::string{"serve.host must not be empty"});
     }
     return {};
 }

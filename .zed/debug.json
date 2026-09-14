@@ -1,9 +1,9 @@
 [
     {
-        "label": "Debug Main Program",
+        "label": "Build & Debug Main (cmd)",
         "adapter": "CodeLLDB",
         "request": "launch",
-        "program": "build/app",
+        "program": "build/cmd",
         "cwd": "$ZED_WORKTREE_ROOT",
         "build": {
             "command": "sh",
@@ -11,10 +11,32 @@
         },
     },
     {
-        "label": "Debug Tests",
+        "label": "Debug Tests (test_config_manager)",
         "adapter": "CodeLLDB",
         "request": "launch",
-        "program": "build/tests/test_core",
+        "program": "build/tests/test_config_manager",
+        "cwd": "$ZED_WORKTREE_ROOT",
+        "build": {
+            "command": "sh",
+            "args": ["-c", "pixi run config-debug && pixi run build"],
+        },
+    },
+    {
+        "label": "Debug Tests (test_doctest_usage)",
+        "adapter": "CodeLLDB",
+        "request": "launch",
+        "program": "build/tests/test_doctest_usage",
+        "cwd": "$ZED_WORKTREE_ROOT",
+        "build": {
+            "command": "sh",
+            "args": ["-c", "pixi run config-debug && pixi run build"],
+        },
+    },
+    {
+        "label": "Debug Tests (test_yyjson_wrapper)",
+        "adapter": "CodeLLDB",
+        "request": "launch",
+        "program": "build/tests/test_yyjson_wrapper",
         "cwd": "$ZED_WORKTREE_ROOT",
         "build": {
             "command": "sh",

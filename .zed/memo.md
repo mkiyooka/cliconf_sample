@@ -27,34 +27,12 @@ Zedのremote開発用設定を説明します。
 
 ### CodeLLDBアダプタ設定（ローカル開発時のみ）
 
-ローカル開発時にデバッグを使用する場合は、プロジェクトルートに `.zed/debug.json` を作成してください:
+ローカル開発時にデバッグを使用する場合は `.zed/debug.json` を使用してください:
 
-```json
-[
-    {
-        "label": "Build & Debug Main Program",
-        "adapter": "CodeLLDB",
-        "program": "build/app",
-        "build": {
-            "command": "pixi",
-            "args": ["run", "build"]
-        },
-        "sourceLanguages": ["c++"],
-        "runInTerminal": false
-    },
-    {
-        "label": "Build & Debug Tests",
-        "adapter": "CodeLLDB",
-        "program": "build/tests/test_core",
-        "build": {
-            "command": "pixi",
-            "args": ["run", "build"]
-        },
-        "sourceLanguages": ["c++"],
-        "runInTerminal": false
-    }
-]
-```
+- `build/cmd`: メインの実行バイナリ
+- `build/tests/test_config_manager`: ConfigManager のテスト
+- `build/tests/test_doctest_usage`: doctest サンプルのテスト
+- `build/tests/test_yyjson_wrapper`: yyjson ラッパーのテスト
 
 **注意**: `debug.json` は `.gitignore` に追加することをお勧めします。
 

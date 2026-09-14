@@ -3,11 +3,14 @@
 # doctest - Testing framework
 set(CMAKE_POLICY_DEFAULT_CMP0091 NEW)
 set(CMAKE_POLICY_VERSION_MINIMUM 3.5 CACHE STRING "" FORCE)
-add_external_package(doctest ext/doctest-2.4.12
-    URL https://github.com/doctest/doctest/archive/refs/tags/v2.4.12.tar.gz
-    URL_HASH SHA256=73381c7aa4dee704bd935609668cf41880ea7f19fa0504a200e13b74999c2d70
+add_external_package(doctest ext/doctest-2.5.3
+    TARGET_CHECK doctest::doctest
+    URL https://github.com/doctest/doctest/archive/refs/tags/v2.5.3.tar.gz
+    URL_HASH SHA256=174ebc4e769928959614789c5b4e9c3d0a0f81a62bb608756b127bfebfb21331
 )
-FetchContent_MakeAvailable(doctest)
+if(NOT doctest_ALREADY_PROVIDED)
+    FetchContent_MakeAvailable(doctest)
+endif()
 
 # Mark doctest as system library to exclude it from clang-tidy checks
 if(TARGET doctest)

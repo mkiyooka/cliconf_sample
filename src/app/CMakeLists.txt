@@ -7,6 +7,7 @@ target_link_libraries(app
     PRIVATE nlohmann_json::nlohmann_json
     PRIVATE fkYAML_target
     PRIVATE cliconf::cliconf
+    PRIVATE sanitizer_flags
 )
 
 # プリコンパイル済みヘッダーの設定

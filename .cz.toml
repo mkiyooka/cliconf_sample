@@ -1,0 +1,84 @@
+# Commitizen設定ファイル
+# C++プロジェクトで使用可能
+# conventional-commit-types (https://github.com/commitizen/conventional-commit-types) 準拠
+
+[tool.commitizen]
+name = "cz_customize"
+version = "0.1.0"
+tag_format = "v$version"
+version_scheme = "semver2"
+update_changelog_on_bump = true
+major_version_zero = true
+# cz bump 時に CMakeLists.txt の project(VERSION ...) も同時に書き換える
+version_files = ["CMakeLists.txt:^\\s*VERSION"]
+
+# conventional-commit-types拡張設定
+[tool.commitizen.customize]
+message_template = "{{change_type}}{% if scope %}({{scope}}){% endif %}{% if is_breaking_change %}!{% endif %}: {{subject}}{% if body %}\n\n{{body}}{% endif %}{% if footer %}\n\n{{footer}}{% endif %}"
+example = "feat(parser): add ability to parse arrays"
+schema = "<type>(<scope>): <subject>\n<BLANK LINE>\n<body>\n<BLANK LINE>\n<footer>"
+schema_pattern = "^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\\([a-zA-Z0-9_-]+\\))?!?:\\s.+$"
+bump_pattern = "^(BREAKING CHANGE|feat|fix)"
+# changelog: 件名（1 行目）だけを拾い、種類ごとに見出しを分ける。
+# 未指定だと本文の各行まで箇条書きに展開されてしまう
+changelog_pattern = "^(feat|fix|perf|refactor|docs|build|test|chore|revert)(\\(.*\\))?(!)?:"
+commit_parser = "^(?P<change_type>feat|fix|perf|refactor|docs|build|test|chore|revert)(?:\\((?P<scope>[^()\\r\\n]*)\\))?(?P<breaking>!)?:\\s(?P<message>[^\\r\\n]*)"
+
+[tool.commitizen.customize.bump_map]
+"BREAKING CHANGE" = "MAJOR"
+"feat" = "MINOR"
+"fix" = "PATCH"
+
+[tool.commitizen.customize.change_type_map]
+"feat" = "Features"
+"fix" = "Bug Fixes"
+"perf" = "Performance"
+"refactor" = "Refactoring"
+"docs" = "Documentation"
+"build" = "Build System"
+"test" = "Tests"
+"chore" = "Chores"
+"revert" = "Reverts"
+
+[[tool.commitizen.customize.questions]]
+type = "list"
+name = "change_type"
+message = "コミットの種類を選択してください"
+choices = [
+  { value = "feat", name = "feat: 新機能" },
+  { value = "fix", name = "fix: バグ修正" },
+  { value = "docs", name = "docs: ドキュメント変更" },
+  { value = "style", name = "style: フォーマット変更" },
+  { value = "refactor", name = "refactor: リファクタリング" },
+  { value = "perf", name = "perf: パフォーマンス改善" },
+  { value = "test", name = "test: テスト追加・修正" },
+  { value = "chore", name = "chore: その他の変更" },
+  { value = "revert", name = "revert: コミット取り消し" },
+]
+
+[[tool.commitizen.customize.questions]]
+type = "list"
+name = "scope"
+message = "スコープ (省略可):"
+choices = [
+  { value = "", name = "-: 省略" },
+  { value = "core", name = "core: コア機能" },
+  { value = "config", name = "config: 設定管理" },
+  { value = "cli", name = "cli: CLI機能" },
+]
+
+[[tool.commitizen.customize.questions]]
+type = "input"
+name = "subject"
+message = "変更内容の短い説明:"
+
+[[tool.commitizen.customize.questions]]
+type = "input"
+name = "body"
+message = "詳細な説明 (省略可):"
+multiline = true
+
+[[tool.commitizen.customize.questions]]
+type = "confirm"
+name = "show_message"
+message = "body messageを追加しますか？"

@@ -19,6 +19,10 @@ add_external_package(fmt third_party/fmt-12.2.0
 )
 FetchContent_MakeAvailable(fmt)
 
+# cliconf が取得する csv-parser は programs/（csv_info 等）を無条件でビルドするため、
+# cliconf を取り込む前にここで無効化しておく
+set(CSV_BUILD_PROGRAMS OFF CACHE BOOL "" FORCE)
+
 add_external_package(cliconf ext/cliconf
     GIT_REPOSITORY https://github.com/mkiyooka/cliconf.git
     GIT_TAG v0.1.0

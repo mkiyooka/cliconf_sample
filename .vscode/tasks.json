@@ -1,93 +1,116 @@
 {
     "version": "2.0.0",
     "options": {
-        "cwd": "${workspaceFolder}",
-        "env": {
-            "PATH": "${env:HOME}/.pixi/bin:${env:PATH}"
-        }
+        "cwd": "${workspaceFolder}"
     },
     "tasks": [
         {
-            "label": "config_release",
+            "label": "config (Release)",
             "type": "shell",
             "command": "pixi",
             "args": ["run", "config"],
-            "group": "build",
-            "detail": "CMakeの設定（Release）",
+            "group": { "kind": "build", "isDefault": false },
+            "detail": "CMake 設定（Release）",
             "problemMatcher": []
         },
         {
-            "label": "build_release",
-            "type": "shell",
-            "command": "pixi",
-            "args": ["run", "build"],
-            "group": { "kind": "build", "isDefault": true },
-            "detail": "CMakeでプロジェクトをビルド",
-            "dependsOn": ["config_release"],
-            "problemMatcher": ["$gcc"]
-        },
-        {
-            "label": "config_debug",
+            "label": "config (Debug)",
             "type": "shell",
             "command": "pixi",
             "args": ["run", "config-debug"],
-            "group": "build",
-            "detail": "CMakeの設定（Debug）",
+            "group": { "kind": "build", "isDefault": false },
+            "detail": "CMake 設定（Debug）",
             "problemMatcher": []
         },
         {
-            "label": "build_debug",
+            "label": "build",
             "type": "shell",
             "command": "pixi",
             "args": ["run", "build"],
             "group": { "kind": "build", "isDefault": true },
-            "detail": "CMakeでプロジェクトをビルド",
-            "dependsOn": ["config_debug"],
+            "detail": "ビルド（build/）",
             "problemMatcher": ["$gcc"]
         },
         {
-            "label": "cmake_clean",
+            "label": "test",
+            "type": "shell",
+            "command": "pixi",
+            "args": ["run", "test"],
+            "group": { "kind": "test", "isDefault": true },
+            "detail": "ctest でテスト実行",
+            "problemMatcher": []
+        },
+        {
+            "label": "clean",
             "type": "shell",
             "command": "pixi",
             "args": ["run", "clean"],
             "group": "build",
-            "detail": "ビルド成果物をクリーンアップ"
+            "detail": "ビルド成果物をクリーン",
+            "problemMatcher": []
         },
         {
-            "label": "ctest",
+            "label": "format",
             "type": "shell",
             "command": "pixi",
-            "args": ["run", "test"],
+            "args": ["run", "-e", "dev", "format"],
+            "group": "build",
+            "detail": "clang-format でコード整形",
+            "problemMatcher": []
+        },
+        {
+            "label": "lint",
+            "type": "shell",
+            "command": "pixi",
+            "args": ["run", "-e", "dev", "lint"],
+            "group": "build",
+            "detail": "clang-tidy で静的解析",
+            "problemMatcher": []
+        },
+        {
+            "label": "cppcheck",
+            "type": "shell",
+            "command": "pixi",
+            "args": ["run", "-e", "dev", "run-cppcheck"],
+            "group": "build",
+            "detail": "cppcheck で静的解析",
+            "problemMatcher": []
+        },
+        {
+            "label": "fullcheck",
+            "type": "shell",
+            "command": "pixi",
+            "args": ["run", "-e", "dev", "fullcheck"],
+            "group": "build",
+            "detail": "typos + lint + cppcheck をまとめて実行",
+            "problemMatcher": []
+        },
+        {
+            "label": "asan (config + build + test)",
+            "type": "shell",
+            "command": "pixi",
+            "args": ["run", "-e", "dev", "asan"],
             "group": "test",
-            "detail": "テストを実行",
-            "dependsOn": ["build_release"]
+            "detail": "ASan + UBSan ビルドとテスト（build-asan/）",
+            "problemMatcher": ["$gcc"]
         },
         {
-            "label": "quality_format",
+            "label": "coverage (config + run + report)",
             "type": "shell",
             "command": "pixi",
-            "args": ["run", "format"],
-            "group": "build",
-            "detail": "clang-formatでコードをフォーマット",
-            "dependsOn": ["config_release"]
-        },
+            "args": ["run", "-e", "dev", "coverage"],
+            "group": "test",
+            "detail": "カバレッジ計測・HTML レポート生成（build-coverage/）",
+            "problemMatcher": []
+        }
+    ],
+    "inputs": [
         {
-            "label": "quality_lint",
-            "type": "shell",
-            "command": "pixi",
-            "args": ["run", "lint"],
-            "group": "build",
-            "detail": "clang-tidyでコードをリント",
-            "dependsOn": ["config_release"]
-        },
-        {
-            "label": "quality_fullcheck",
-            "type": "shell",
-            "command": "pixi",
-            "args": ["run", "fullcheck"],
-            "group": "build",
-            "detail": "全品質チェックを実行",
-            "dependsOn": ["config_release"]
+            "id": "buildPreset",
+            "description": "ビルドプリセットを選択",
+            "type": "pickString",
+            "options": ["release", "debug", "relwithdebinfo", "asan"],
+            "default": "release"
         }
     ]
 }

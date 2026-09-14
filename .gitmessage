@@ -1,0 +1,25 @@
+# <type>(<scope>): <subject>
+#
+# <body>
+#
+# === CONVENTIONAL COMMIT REFERENCE ===
+#
+# Types (必須):
+#	feat:     新機能
+#	fix:      バグ修正
+#	docs:     ドキュメント変更
+#	style:    フォーマット変更
+#	refactor: リファクタリング
+#	perf:     パフォーマンス改善
+#	test:     テスト追加・修正
+#	chore:    その他の変更
+#	revert:   コミット取り消し
+#
+# Scopes (省略可):
+#	core:      C++ コア機能
+#	solver:    ソルバー機能
+#	parser:    パーサー機能
+#	cli:       CLI機能
+#	benchmark: ベンチマーク
+#	examples:  サンプルコード
+#	build:     ビルドシステム (CMake)

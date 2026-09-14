@@ -28,8 +28,11 @@ source ~/.zshrc    # zsh の場合
 ## セットアップ
 
 ```bash
-# Pixi環境のインストール
+# Pixi環境のインストール（ビルド・テストのみ）
 pixi install
+
+# 開発ツール（clang-tidy / cppcheck / typos / llvm-cov 等）も使う場合
+pixi install -e dev
 
 # CMake設定とビルド
 pixi run config
@@ -51,15 +54,18 @@ pixi run test
 
 ## 開発ツール
 
+開発ツールは `dev` 環境に分離されている（`pixi install -e dev` が必要）。
+
 ```bash
 # コードフォーマット
-pixi run format
+pixi run -e dev format
 
 # 静的解析
-pixi run lint
+pixi run -e dev lint
+pixi run -e dev run-cppcheck
 
-# 全チェック実行
-pixi run fullcheck
+# 全チェック実行（typos + lint + cppcheck）
+pixi run -e dev fullcheck
 ```
 
 ## サニタイザ（Linux）
@@ -67,7 +73,7 @@ pixi run fullcheck
 AddressSanitizer と UndefinedBehaviorSanitizer を有効にしてテストを実行します。
 
 ```bash
-pixi run asan
+pixi run -e dev asan
 ```
 
 ## カバレッジ（Linux）
@@ -75,7 +81,7 @@ pixi run asan
 Clang のソースベースカバレッジを使用してレポートを生成します。
 
 ```bash
-pixi run coverage
+pixi run -e dev coverage
 ```
 
 HTML レポートは `build-coverage/coverage-html/index.html` に生成されます。
@@ -89,15 +95,22 @@ HTML レポートは `build-coverage/coverage-html/index.html` に生成され�
 `cmake/coverage.cmake` の `--ignore-filename-regex` オプションで制御します。
 
 ```cmake
-"--ignore-filename-regex=.*/build-coverage/.*|.*/third_party/.*|.*/.pixi/.*|.*/tests/.*"
+"--ignore-filename-regex=.*/build-coverage/.*|.*/third_party/.*|.*/_deps/.*|.*/.pixi/.*|.*/tests/.*|.*/benches/.*|.*/examples/.*"
 ```
 
 | パターン | 除外対象 |
 | --- | --- |
 | `.*/build-coverage/.*` | ビルド生成物 |
-| `.*/third_party/.*` | FetchContent で取得したサードパーティライブラリ |
+| `.*/third_party/.*` | ローカル配置したサードパーティライブラリ |
+| `.*/_deps/.*` | FetchContent で取得したサードパーティライブラリ |
 | `.*/.pixi/.*` | pixi 環境のヘッダー |
 | `.*/tests/.*` | テストコード |
+| `.*/benches/.*` | ベンチマークコード |
+| `.*/examples/.*` | サンプルコード |
+
+除外パターンを追加したい場合は、`include(cmake/coverage.cmake)` の前に
+`COVERAGE_EXTRA_IGNORE_REGEX` を設定する。
+また、カバレッジ計測で実行するテストバイナリは同様に `COVERAGE_TEST_TARGETS` で指定する。
 
 **カバレッジ対象に含める方法:**
 

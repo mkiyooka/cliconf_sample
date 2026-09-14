@@ -9,7 +9,7 @@ set_target_properties(test_core PROPERTIES
 )
 
 target_include_directories(test_core PRIVATE ${CMAKE_SOURCE_DIR}/include)
-target_link_libraries(test_core PRIVATE core doctest::doctest)
+target_link_libraries(test_core PRIVATE core doctest::doctest PRIVATE sanitizer_flags)
 
 # Register the test with CTest
 add_test(

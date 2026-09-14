@@ -2,10 +2,10 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug Main Program",
+            "name": "Debug cmd",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/app",
+            "program": "${workspaceFolder}/build/cmd",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
@@ -13,7 +13,6 @@
             "externalConsole": false,
             "osx": { "MIMode": "lldb" },
             "linux": { "MIMode": "gdb" },
-            "windows": { "MIMode": "vs" },
             "setupCommands": [
                 {
                     "description": "Enable pretty-printing for debugger",
@@ -21,13 +20,13 @@
                     "ignoreFailures": true
                 }
             ],
-            "preLaunchTask": "build_debug"
+            "preLaunchTask": "build"
         },
         {
-            "name": "Debug Tests",
+            "name": "Debug test_config_manager",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/tests/test_core",
+            "program": "${workspaceFolder}/build/tests/test_config_manager",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
@@ -35,7 +34,6 @@
             "externalConsole": false,
             "osx": { "MIMode": "lldb" },
             "linux": { "MIMode": "gdb" },
-            "windows": { "MIMode": "vs" },
             "setupCommands": [
                 {
                     "description": "Enable pretty-printing for debugger",
@@ -43,7 +41,49 @@
                     "ignoreFailures": true
                 }
             ],
-            "preLaunchTask": "build_debug"
+            "preLaunchTask": "build"
+        },
+        {
+            "name": "Debug test_doctest_usage",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/tests/test_doctest_usage",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "osx": { "MIMode": "lldb" },
+            "linux": { "MIMode": "gdb" },
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for debugger",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ],
+            "preLaunchTask": "build"
+        },
+        {
+            "name": "Debug test_yyjson_wrapper",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/tests/test_yyjson_wrapper",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "osx": { "MIMode": "lldb" },
+            "linux": { "MIMode": "gdb" },
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for debugger",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ],
+            "preLaunchTask": "build"
         }
     ]
 }

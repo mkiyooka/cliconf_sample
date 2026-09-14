@@ -66,6 +66,11 @@ CheckOptions:
       value: k
     - key: readability-identifier-naming.FunctionCase
       value: CamelCase
+    - key: readability-identifier-naming.MethodCase
+      value: CamelCase
+    # STL互換インターフェース（Google C++ Style Guide で lower_case が許容されるメソッド）
+    - key: readability-identifier-naming.MethodIgnoredRegexp
+      value: "^(begin|end|cbegin|cend|rbegin|rend|crbegin|crend|size|empty|clear|data|front|back|push_back|pop_back|push_front|pop_front|insert|erase|find|count|at|swap|reserve|resize|capacity)$"
     - key: readability-identifier-naming.GlobalConstantCase
       value: CamelCase
     - key: readability-identifier-naming.GlobalConstantPrefix

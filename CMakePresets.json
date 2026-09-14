@@ -37,21 +37,25 @@
             }
         },
         {
-            "name": "asan",
-            "inherits": "base",
-            "binaryDir": "${sourceDir}/build-asan",
-            "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "RelWithDebInfo",
-                "ENABLE_SANITIZERS": "ON"
-            }
-        },
-        {
             "name": "coverage",
+            "displayName": "Coverage Build",
+            "description": "Debug build with source-based coverage instrumentation (clang)",
             "inherits": "base",
             "binaryDir": "${sourceDir}/build-coverage",
             "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+                "CMAKE_BUILD_TYPE": "Debug",
                 "ENABLE_COVERAGE": "ON"
+            }
+        },
+        {
+            "name": "asan",
+            "displayName": "ASan + UBSan Build",
+            "description": "Debug build with AddressSanitizer and UndefinedBehaviorSanitizer",
+            "inherits": "base",
+            "binaryDir": "${sourceDir}/build-asan",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "ENABLE_SANITIZERS": "ON"
             }
         }
     ],
@@ -69,12 +73,13 @@
             "configurePreset": "relwithdebinfo"
         },
         {
-            "name": "asan",
-            "configurePreset": "asan"
-        },
-        {
             "name": "coverage",
             "configurePreset": "coverage"
+        },
+        {
+            "name": "asan",
+            "configurePreset": "asan",
+            "jobs": 2
         }
     ],
     "testPresets": [
@@ -91,12 +96,12 @@
             "configurePreset": "relwithdebinfo"
         },
         {
-            "name": "asan",
-            "configurePreset": "asan"
-        },
-        {
             "name": "coverage",
             "configurePreset": "coverage"
+        },
+        {
+            "name": "asan",
+            "configurePreset": "asan"
         }
     ]
 }

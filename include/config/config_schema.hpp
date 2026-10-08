@@ -110,7 +110,7 @@ struct NodesExtraLoader {
         if (conf.nodes_csv.empty()) {
             return;
         }
-        utility::CsvReader reader(conf.nodes_csv);
+        const utility::CsvReader reader(conf.nodes_csv);
         auto hosts = reader.ReadFilteredAsStrings(
             [](const csv::CSVRow &row) { return row["enabled"].get<int>() == 1; }, {"host"}
         );

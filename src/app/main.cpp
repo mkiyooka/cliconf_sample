@@ -85,7 +85,7 @@ int RunApp(int argc, char *argv[]) {
     // cliconf v0.1.0: Resolve() は例外を投げず LoadResult<T>（compat::expected<T, LoadError>）を返す。
     // 設定ファイルが開けない・構文エラー・型不一致などは LoadError として返り、
     // Format() で "<file>: key '<key>': <message>" 形式の文字列が得られる。
-    // code（config::LoadErrc）で分類も判定できる（IoError / ParseError / TypeMismatch 等）。
+    // code（config::LoadErrc）で分類も判定できる（kIoError / kParseError / kTypeMismatch 等）。
     const auto resolved = config_manager.Resolve(config_files);
     if (!resolved) {
         fmt::print(stderr, "Error: {}\n", resolved.error().Format());

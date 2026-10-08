@@ -166,8 +166,8 @@ FetchContent_MakeAvailable(cliconf)
 cliconf v0.1.0 では `ConfigManager::Resolve()` は例外を投げず、`config::LoadResult<T>`
 （`compat::expected<T, config::LoadError>`）を返します。設定ファイルが開けない・構文エラー・
 型不一致などは `LoadError` として返り、`Format()` で `"<file>: key '<key>': <message>"` 形式の
-文字列が得られます。`code`（`config::LoadErrc`: `IoError` / `ParseError` / `TypeMismatch` /
-`UnsupportedFormat` / `AmbiguousDefault` / `ManifestCycle`）で分類も判定できます。
+文字列が得られます。`code`（`config::LoadErrc`: `kIoError` / `kParseError` / `kTypeMismatch` /
+`kUnsupportedFormat` / `kAmbiguousDefault` / `kManifestCycle`）で分類も判定できます。
 
 ```cpp
 const auto resolved = config_manager.Resolve(config_files);
